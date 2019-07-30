@@ -17,6 +17,7 @@ provider:
         - "arn:aws:s3:::sentinel-s1*"
 
   environment:
+    AWS_REQUEST_PAYER: requester
     VSI_CACHE: TRUE
     VSI_CACHE_SIZE: 536870912
     CPL_TMPDIR: /tmp

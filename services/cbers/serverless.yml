@@ -17,10 +17,11 @@ provider:
         - "arn:aws:s3:::cbers-meta-pds*"
 
   environment:
+    AWS_REQUEST_PAYER: requester
     VSI_CACHE: TRUE
     VSI_CACHE_SIZE: 536870912
     CPL_TMPDIR: /tmp
-    CPL_VSIL_CURL_ALLOWED_EXTENSIONS: .TIF
+    CPL_VSIL_CURL_ALLOWED_EXTENSIONS: .tif
     GDAL_CACHEMAX: 512
     GDAL_DATA: /var/task/share/gdal
     GDAL_DISABLE_READDIR_ON_OPEN: EMPTY_DIR
