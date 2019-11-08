@@ -93,7 +93,7 @@ def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents='2
     for address in addresses:
         with rasterio.open(address) as src:
             bounds = transform_bounds(src.crs, "epsg:4326", *src.bounds, densify_pts=21)
-            if percents[i] != 0 and percents[i+1] != 100:
+            if int(percents[i]) != 0 and int(percents[i+1]) != 100:
                 overviews = src.overviews(1)
                 d = src.read( out_shape=(1, int(src.height / overviews[len(overviews)-1]), int(src.width / overviews[len(overviews)-1]) ))
                 dflatten = numpy.array(d.flatten())
