@@ -253,7 +253,6 @@ def tile(
         tile, mask, rescale=None, color_formula=color_formula
     )
 
-    color_map = None
     if color_map:
         color_map = get_colormap(color_map, format="gdal")
 
