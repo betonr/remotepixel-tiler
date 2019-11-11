@@ -95,17 +95,26 @@ def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents=''
             bounds = transform_bounds(src.crs, "epsg:4326", *src.bounds, densify_pts=21)
             if int(percents[i]) != 0 and int(percents[i+1]) != 100:
                 overviews = src.overviews(1)
-                d = src.read( out_shape=(1, int(src.height / overviews[len(overviews)-1]), int(src.width / overviews[len(overviews)-1]) ))
+                if len(overviews) > 0:
+                    d = src.read( out_shape=(1, int(src.height / overviews[len(overviews)-1]), int(src.width / overviews[len(overviews)-1]) ))
+                else:
+                    d = src.read()
+
                 dflatten = numpy.array(d.flatten())
                 p_start, p_end = numpy.percentile( dflatten[dflatten>0], (int(percents[i]), (int(percents[i+1]))) )
                 values.append([p_start, p_end])
             else:
                 values.append([None, None])
-            i += 1
+            i += 2
 
     if not utils.tile_exists(bounds, tile_z, tile_x, tile_y):
-        raise TileOutsideBounds(
-            "Tile {}/{}/{} is outside image bounds".format(tile_z, tile_x, tile_y)
+        # raise TileOutsideBounds(
+        #     "Tile {}/{}/{} is outside image bounds".format(tile_z, tile_x, tile_y)
+        # )
+        return (
+            "OK",
+            f"image/{ext}",
+            b'',
         )
 
     mercator_tile = mercantile.Tile(x=tile_x, y=tile_y, z=tile_z)
@@ -121,10 +130,10 @@ def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents=''
     new_data = list(data)
     has_modification = False
     for ds in range(0, len(new_data)):
-        if values[ds][0] != None and values[ds][1] != None:
+        if values[ds][0] is not None and values[ds][1] is not None:
             has_modification = True
             new_data[ds] = exposure.rescale_intensity(new_data[ds], in_range=(values[ds][0], values[ds][1]), out_range=(0,255))
-    if has_modification:
+    if has_modification == True:
         data = numpy.array(new_data).astype(numpy.uint8)
 
     return numpy.concatenate(data), mask
@@ -217,7 +226,7 @@ def tile(
     scale: int = 1,
     ext: str = "png",
     bands: str = None,
-    percents: str = None,
+    percents: str = "",
     expr: str = None,
     rescale: str = None,
     color_formula: str = None,
@@ -241,9 +250,10 @@ def tile(
         raise CbersTilerError("No bands nor expression given")
 
     rtile, rmask = _postprocess(
-        tile, mask, rescale=rescale, color_formula=color_formula
+        tile, mask, rescale=None, color_formula=color_formula
     )
 
+    color_map = None
     if color_map:
         color_map = get_colormap(color_map, format="gdal")
 
