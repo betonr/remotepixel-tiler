@@ -105,7 +105,7 @@ def landsat8_tile(sceneid, tile_x, tile_y, tile_z, bands=("4", "3", "2"), tilesi
         # )
         return (
             "OK",
-            f"image/{ext}",
+            f"image/png",
             b'',
         )
 

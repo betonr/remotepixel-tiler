@@ -113,7 +113,7 @@ def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents=''
         # )
         return (
             "OK",
-            f"image/{ext}",
+            f"image/png",
             b'',
         )
 
