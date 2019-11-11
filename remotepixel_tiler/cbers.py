@@ -35,7 +35,7 @@ CBERS_BUCKET = "s3://cbers-pds"
 MAX_THREADS = int(os.environ.get("MAX_THREADS", multiprocessing.cpu_count() * 5))
 
 
-def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents='2,98,2,98,2,98', **kwargs):
+def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents='', **kwargs):
     """
     Create mercator tile from CBERS data.
 
@@ -54,7 +54,7 @@ def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents='2
         defined for the instrument
     tilesize : int, optional (default: 256)
         Output image size.
-    percents : str (default: 2,98,2,98,2,98)
+    percents : str 
         parcents to apply in bands (linear)
     kwargs: dict, optional
         These will be passed to the 'rio_tiler.utils._tile_read' function.
@@ -100,7 +100,7 @@ def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents='2
                 p_start, p_end = numpy.percentile( dflatten[dflatten>0], (int(percents[i]), (int(percents[i+1]))) )
                 values.append([p_start, p_end])
             else:
-                values.append([0, 0])
+                values.append([None, None])
             i += 1
 
     if not utils.tile_exists(bounds, tile_z, tile_x, tile_y):
@@ -118,11 +118,14 @@ def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents='2
         data, masks = zip(*list(executor.map(_tiler, addresses)))
         mask = numpy.all(masks, axis=0).astype(numpy.uint8) * 255
 
-    data = list(data)
-    for ds in range(0, len(data)):
-        if values[ds][0] != 0 and values[ds][1] != 0:
-            data[ds] = exposure.rescale_intensity(data[ds], in_range=(values[ds][0], values[ds][1]), out_range=(0,255))
-    data = numpy.array(data).astype(numpy.uint8)
+    new_data = list(data)
+    has_modification = False
+    for ds in range(0, len(new_data)):
+        if values[ds][0] != None and values[ds][1] != None:
+            has_modification = True
+            new_data[ds] = exposure.rescale_intensity(new_data[ds], in_range=(values[ds][0], values[ds][1]), out_range=(0,255))
+    if has_modification:
+        data = numpy.array(new_data).astype(numpy.uint8)
 
     return numpy.concatenate(data), mask
 
