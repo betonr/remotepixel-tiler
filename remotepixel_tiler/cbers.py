@@ -111,11 +111,7 @@ def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents=''
         # raise TileOutsideBounds(
         #     "Tile {}/{}/{} is outside image bounds".format(tile_z, tile_x, tile_y)
         # )
-        return (
-            "OK",
-            f"image/png",
-            b'',
-        )
+        return None, None
 
     mercator_tile = mercantile.Tile(x=tile_x, y=tile_y, z=tile_z)
     tile_bounds = mercantile.xy_bounds(mercator_tile)
@@ -248,6 +244,13 @@ def tile(
         )
     else:
         raise CbersTilerError("No bands nor expression given")
+
+    if not tile or not mask:
+        return (
+            "OK",
+            f"image/png",
+            b'',
+        )
 
     rtile, rmask = _postprocess(
         tile, mask, rescale=None, color_formula=color_formula
