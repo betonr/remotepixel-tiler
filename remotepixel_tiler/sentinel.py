@@ -9,7 +9,6 @@ import multiprocessing
 import numpy
 from functools import partial
 from concurrent import futures
-from skimage import exposure
 import urllib
 
 import mercantile
@@ -21,7 +20,7 @@ from rio_tiler.profiles import img_profiles
 from rio_tiler.utils import array_to_image, get_colormap, expression
 from rio_tiler.errors import TileOutsideBounds, InvalidBandName, InvalidSentinelSceneId
 
-from remotepixel_tiler.utils import _postprocess
+from remotepixel_tiler.utils import _postprocess, rescale_intensity
 
 from lambda_proxy.proxy import API
 
@@ -82,8 +81,10 @@ def sentinel2_tile(sceneid, tile_x, tile_y, tile_z, bands=("04", "03", "02"), ti
                 else:
                     d = src.read()
 
-                dflatten = numpy.array(d.flatten())
-                p_start, p_end = numpy.percentile( dflatten[dflatten>0], (int(percents[i]), (int(percents[i+1]))) )
+                dflatten_full = numpy.array(d.flatten())
+                dflatten = dflatten_full[dflatten_full > 0]
+
+                p_start, p_end = numpy.percentile( dflatten, (int(percents[i]), (int(percents[i+1]))) )
                 values.append([p_start, p_end])
             else:
                 values.append([None, None])
@@ -110,7 +111,8 @@ def sentinel2_tile(sceneid, tile_x, tile_y, tile_z, bands=("04", "03", "02"), ti
     for ds in range(0, len(new_data)):
         if values[ds][0] is not None and values[ds][1] is not None:
             has_modification = True
-            new_data[ds] = exposure.rescale_intensity(new_data[ds], in_range=(values[ds][0], values[ds][1]), out_range=(0,255))
+            new_data[ds] = rescale_intensity(new_data[ds], in_range=(values[ds][0], values[ds][1]), out_range=(0,255))
+            
     if has_modification == True:
         data = numpy.array(new_data).astype(numpy.uint8)
 
@@ -268,7 +270,7 @@ def tile(
     else:
         raise SentinelTilerError("No bands nor expression given")
 
-    if not tile or not mask:
+    if  tile is None or mask is None:
         return (
             "OK",
             f"image/png",

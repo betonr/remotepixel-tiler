@@ -42,9 +42,9 @@ $ sudo SECRET_TOKEN=mytoken make deploy
 You can deploy each tiler independantly
 
 ```bash
-$ services/landsat && sudo sls deploy --stage production
-$ services/cbers && sudo sls deploy --stage production
-$ services/sentinel && sudo sls deploy --stage production
+$ services/landsat && sudo sls deploy --stage production --aws-profile fm
+$ services/cbers && sudo sls deploy --stage production --aws-profile fm
+$ services/sentinel && sudo sls deploy --stage production --aws-profile fm
 ```
 
 #### Infos & links

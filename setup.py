@@ -17,7 +17,6 @@ inst_reqs = [
     "rio-color",
     "rio-tiler>=1.2.10",
     "rio-tiler-mvt",
-    "scikit-image==0.16.2",
     "vtzero",
 ]
 

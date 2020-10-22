@@ -7,7 +7,6 @@ import multiprocessing
 import numpy
 from functools import partial
 from concurrent import futures
-from skimage import exposure
 
 from typing import BinaryIO, Tuple, Union
 
@@ -24,7 +23,7 @@ from aws_sat_api.search import cbers as cbers_search
 from rio_color.operations import parse_operations
 from rio_color.utils import scale_dtype, to_math_type
 
-from remotepixel_tiler.utils import _postprocess
+from remotepixel_tiler.utils import _postprocess, rescale_intensity
 
 from lambda_proxy.proxy import API
 
@@ -128,7 +127,7 @@ def cbers_tile(sceneid, tile_x, tile_y, tile_z, bands, tilesize=256, percents=''
     for ds in range(0, len(new_data)):
         if values[ds][0] is not None and values[ds][1] is not None:
             has_modification = True
-            new_data[ds] = exposure.rescale_intensity(new_data[ds], in_range=(values[ds][0], values[ds][1]), out_range=(0,255))
+            new_data[ds] = rescale_intensity(new_data[ds], in_range=(values[ds][0], values[ds][1]), out_range=(0,255))
     if has_modification == True:
         data = numpy.array(new_data).astype(numpy.uint8)
 
@@ -245,7 +244,7 @@ def tile(
     else:
         raise CbersTilerError("No bands nor expression given")
 
-    if not tile or not mask:
+    if tile is None or mask is None:
         return (
             "OK",
             f"image/png",
