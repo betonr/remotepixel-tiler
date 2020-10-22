@@ -2,21 +2,121 @@
 
 from typing import Any, Dict, Tuple, Union, BinaryIO
 
+import os
+import re
 import json
+import multiprocessing
+import numpy
+from functools import partial
+from concurrent import futures
 import urllib
 
+import mercantile
 import rasterio
 from rasterio import warp
-from rio_tiler import sentinel2
+from rio_tiler import sentinel2, utils
 from rio_tiler.mercator import get_zooms
 from rio_tiler.profiles import img_profiles
 from rio_tiler.utils import array_to_image, get_colormap, expression
+from rio_tiler.errors import TileOutsideBounds, InvalidBandName, InvalidSentinelSceneId
 
-from remotepixel_tiler.utils import _postprocess
+from remotepixel_tiler.utils import _postprocess, rescale_intensity
 
 from lambda_proxy.proxy import API
 
 APP = API(name="sentinel-tiler")
+SENTINEL_BUCKET = "s3://sentinel-s2-l1c"
+SENTINEL_BANDS = ["01", "02", "03", "04", "05", "06", "07", "08", "8A", "09", "10", "11", "12"]
+MAX_THREADS = int(os.environ.get("MAX_THREADS", multiprocessing.cpu_count() * 5))
+
+def sentinel2_tile(sceneid, tile_x, tile_y, tile_z, bands=("04", "03", "02"), tilesize=256, percents='', **kwargs):
+    """
+    Create mercator tile from Sentinel-2 data.
+
+    Attributes
+    ----------
+    sceneid : str
+        Sentinel-2 sceneid.
+    tile_x : int
+        Mercator tile X index.
+    tile_y : int
+        Mercator tile Y index.
+    tile_z : int
+        Mercator tile ZOOM level.
+    bands : tuple, str, optional (default: ('04', '03', '02'))
+        Bands index for the RGB combination.
+    tilesize : int, optional (default: 256)
+        Output image size.
+    kwargs: dict, optional
+        These will be passed to the 'rio_tiler.utils._tile_read' function.
+
+    Returns
+    -------
+    data : numpy ndarray
+    mask: numpy array
+
+    """
+    if not isinstance(bands, tuple):
+        bands = tuple((bands,))
+
+    for band in bands:
+        if band not in SENTINEL_BANDS:
+            raise InvalidBandName("{} is not a valid Sentinel band name".format(band))
+
+    scene_params = sentinel2._sentinel_parse_scene_id(sceneid)
+    sentinel_address = "{}/{}".format(SENTINEL_BUCKET, scene_params["key"])
+
+    addresses = ["{}/B{}.jp2".format(sentinel_address, band) for band in bands]
+
+    values = []
+    percents = percents.split(',')
+    i = 0
+    for address in addresses:
+        with rasterio.open(address) as src:
+            bounds = warp.transform_bounds(src.crs, "epsg:4326", *src.bounds, densify_pts=21)
+            if int(percents[i]) != 0 and int(percents[i+1]) != 100:
+                overviews = src.overviews(1)
+                if len(overviews) > 0:
+                    d = src.read( out_shape=(1, int(src.height / overviews[len(overviews)-1]), int(src.width / overviews[len(overviews)-1]) ))
+                else:
+                    d = src.read()
+
+                dflatten_full = numpy.array(d.flatten())
+                dflatten = dflatten_full[dflatten_full > 0]
+
+                p_start, p_end = numpy.percentile( dflatten, (int(percents[i]), (int(percents[i+1]))) )
+                values.append([p_start, p_end])
+            else:
+                values.append([None, None])
+            i += 2
+
+    if not utils.tile_exists(bounds, tile_z, tile_x, tile_y):
+        # raise TileOutsideBounds(
+        #     "Tile {}/{}/{} is outside image bounds".format(tile_z, tile_x, tile_y)
+        # )
+        return None, None
+
+    mercator_tile = mercantile.Tile(x=tile_x, y=tile_y, z=tile_z)
+    tile_bounds = mercantile.xy_bounds(mercator_tile)
+
+    _tiler = partial(
+        utils.tile_read, bounds=tile_bounds, tilesize=tilesize, nodata=0, **kwargs
+    )
+    with futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+        data, masks = zip(*list(executor.map(_tiler, addresses)))
+        mask = numpy.all(masks, axis=0).astype(numpy.uint8) * 255
+
+    new_data = list(data)
+    has_modification = False
+    for ds in range(0, len(new_data)):
+        if values[ds][0] is not None and values[ds][1] is not None:
+            has_modification = True
+            new_data[ds] = rescale_intensity(new_data[ds], in_range=(values[ds][0], values[ds][1]), out_range=(0,255))
+            
+    if has_modification == True:
+        data = numpy.array(new_data).astype(numpy.uint8)
+
+    return numpy.concatenate(data), mask
 
 
 class SentinelTilerError(Exception):
@@ -146,6 +246,7 @@ def tile(
     scale: int = 1,
     ext: str = "png",
     bands: str = None,
+    percents: str = "",
     expr: str = None,
     rescale: str = None,
     color_formula: str = None,
@@ -163,14 +264,21 @@ def tile(
         tile, mask = expression(scene, x, y, z, expr, tilesize=tilesize)
 
     elif bands is not None:
-        tile, mask = sentinel2.tile(
-            scene, x, y, z, bands=tuple(bands.split(",")), tilesize=tilesize
+        tile, mask = sentinel2_tile(
+            scene, x, y, z, bands=tuple(bands.split(",")), tilesize=tilesize, percents=percents
         )
     else:
         raise SentinelTilerError("No bands nor expression given")
 
+    if  tile is None or mask is None:
+        return (
+            "OK",
+            f"image/png",
+            b'',
+        )
+
     rtile, rmask = _postprocess(
-        tile, mask, rescale=rescale, color_formula=color_formula
+        tile, mask, rescale=None, color_formula=color_formula
     )
 
     if color_map:

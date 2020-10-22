@@ -25,21 +25,26 @@ $ cd remotepixel-tiler/
 
 $ docker login
 
+# config cedentials AWS
+aws configure
+
 # Fetch Amazon linux AMI docker container + Install Python modules + create package
 # Create package using custom GDAL install
-$ make package && make test
+$ make package && sudo make test
 
 # Install serverless and plugin
 $ npm install
 
 # Deploy landsat, cogeo and cbers lambda functions
-$ SECRET_TOKEN=mytoken make deploy
+$ sudo SECRET_TOKEN=mytoken make deploy
 ```
 
 You can deploy each tiler independantly
 
 ```bash
-$ SECRET_TOKEN=mytoken cd services/landsat && sls deploy --stage production
+$ services/landsat && sudo sls deploy --stage production --aws-profile fm
+$ services/cbers && sudo sls deploy --stage production --aws-profile fm
+$ services/sentinel && sudo sls deploy --stage production --aws-profile fm
 ```
 
 #### Infos & links
